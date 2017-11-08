@@ -136,7 +136,8 @@ class Slurm(object):
                 mid = "--dependency=afternotok:%d" % job_id
                 args.append(mid)
             args.append(sh.name)
-            res = subprocess.check_output(args).strip()
+            proc = subprocess.Popen(args, stdout=subprocess.PIPE)
+            res = proc.stdout.read().strip()
             print(res, file=sys.stderr)
             self.name = n
             if not res.startswith(b"Submitted batch"):
