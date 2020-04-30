@@ -98,7 +98,7 @@ class Slurm(object):
         _cmd: submit command (change to "bash" for testing).
         tries: try to run a job either this many times or until the first
                success.
-        depends_on: job ids that this depends on before it is run (users 'afterok')
+        depends_on: job ids that this depends on before it is run (users 'afterany')
         """
         if name_addition is None:
             name_addition = hashlib.sha1(command.encode("utf-8")).hexdigest()
@@ -131,7 +131,7 @@ class Slurm(object):
         job_id = None
         for itry in range(1, tries + 1):
             args = [_cmd]
-            args.extend([("--dependency=afterok:%d" % int(d)) for d in depends_on])
+            args.extend([("--dependency=afterany:%d" % int(d)) for d in depends_on])
             if itry > 1:
                 mid = "--dependency=afternotok:%d" % job_id
                 args.append(mid)
