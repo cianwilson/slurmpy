@@ -87,7 +87,7 @@ class Slurm(object):
                 os.makedirs(self.scripts_dir)
             return "%s/%s.sh" % (self.scripts_dir, self.name)
 
-    def run(self, command, name_addition=None, cmd_kwargs=None, _cmd="sbatch", tries=1, depends_on=None):
+    def write(self, command, name_addition=None, cmd_kwargs=None):
         """
         command: a bash command that you want to run
         name_addition: if not specified, the sha1 of the command to run
@@ -95,10 +95,6 @@ class Slurm(object):
                        date will be added to the job name.
         cmd_kwargs: dict of extra arguments to fill in command
                    (so command itself can be a template).
-        _cmd: submit command (change to "bash" for testing).
-        tries: try to run a job either this many times or until the first
-               success.
-        depends_on: job ids that this depends on before it is run (users 'afterany')
         """
         if name_addition is None:
             name_addition = hashlib.sha1(command.encode("utf-8")).hexdigest()
@@ -119,14 +115,33 @@ class Slurm(object):
         args = "\n".join(args)
 
         tmpl = str(self).replace("__script__", args + "\n###\n" + command)
-        if depends_on is None or (len(depends_on) == 1 and depends_on[0] is None):
-            depends_on = []
 
         if "logs/" in tmpl and not os.path.exists("logs/"):
             os.makedirs("logs")
 
         with open(self._tmpfile(), "w") as sh:
             sh.write(tmpl)
+
+        self.name = n
+        return sh.name
+
+    def run(self, command, name_addition=None, cmd_kwargs=None, _cmd="sbatch", tries=1, depends_on=None):
+        """
+        command: a bash command that you want to run
+        name_addition: if not specified, the sha1 of the command to run
+                       appended to job name. if it is "date", the yyyy-mm-dd
+                       date will be added to the job name.
+        cmd_kwargs: dict of extra arguments to fill in command
+                   (so command itself can be a template).
+        _cmd: submit command (change to "bash" for testing).
+        tries: try to run a job either this many times or until the first
+               success.
+        depends_on: job ids that this depends on before it is run (users 'afterany')
+        """
+        shname = self.write(command, name_addition=name_addition, cmd_kwargs=cmd_kwargs)
+
+        if depends_on is None or (len(depends_on) == 1 and depends_on[0] is None):
+            depends_on = []
 
         job_id = None
         for itry in range(1, tries + 1):
@@ -135,11 +150,10 @@ class Slurm(object):
             if itry > 1:
                 mid = "--dependency=afternotok:%d" % job_id
                 args.append(mid)
-            args.append(sh.name)
+            args.append(shname)
             proc = subprocess.Popen(args, stdout=subprocess.PIPE)
             res = proc.stdout.read().strip()
             print(res, file=sys.stderr)
-            self.name = n
             if not res.startswith(b"Submitted batch"):
                 return None
             j_id = int(res.split()[-1])
